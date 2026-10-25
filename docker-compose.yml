@@ -1,0 +1,18 @@
+services:
+  bank:
+    build: .
+    command: uvicorn mock_bank.main:app --host 0.0.0.0 --port 8001
+    environment:
+      BANK_SERVICE_KEY: ${BANK_SERVICE_KEY:-dev-service-key}
+    ports: ["8001:8001"]
+  assistant:
+    build: .
+    depends_on: [bank]
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      BANK_BASE_URL: http://bank:8001
+      BANK_SERVICE_KEY: ${BANK_SERVICE_KEY:-dev-service-key}
+      AUTH_SECRET: ${AUTH_SECRET:-dev-only-secret}
+      DEMO_AUTH_ENABLED: "true"
+    ports: ["8000:8000"]
