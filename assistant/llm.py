@@ -32,7 +32,7 @@ class AnthropicLLM:
     def complete(self, system, messages, tools) -> LLMResponse:
         try:
             r = self._client.messages.create(
-                model=self._model, max_tokens=self._max_tokens, temperature=0,
+                model=self._model, max_tokens=self._max_tokens,
                 system=system, messages=messages, tools=tools,
             )
         except self._anthropic.APIError as e:
