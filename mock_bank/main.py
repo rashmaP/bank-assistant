@@ -6,19 +6,46 @@ validating the customer's session. Every endpoint enforces account ownership.
 """
 from __future__ import annotations
 
+import logging
 import os
+import time
 from decimal import Decimal, InvalidOperation
 
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from common.logging_setup import accept_request_id, logf, reset_request_id, set_request_id, setup_logging
+
 from .service import BankService, ServiceError
+
+setup_logging()
+log = logging.getLogger("mock_bank")
 
 SERVICE_KEY = os.environ.get("BANK_SERVICE_KEY", "dev-service-key")
 
 app = FastAPI(title="Mock Bank API", version="1.0")
 bank = BankService()
+
+
+@app.middleware("http")
+async def observability(request: Request, call_next):
+    """Adopt the caller's X-Request-ID so logs line up across services; log requests; never leak errors."""
+    rid = accept_request_id(request.headers.get("x-request-id"))
+    token = set_request_id(rid)
+    t0 = time.perf_counter()
+    try:
+        try:
+            response = await call_next(request)
+        except Exception:
+            log.error("unhandled_error", exc_info=True)
+            response = JSONResponse(status_code=500, content={"error": {"code": "INTERNAL", "message": "Internal error."}})
+        response.headers["X-Request-ID"] = rid
+        logf(log, logging.INFO, "request", method=request.method, path=request.url.path,
+             status=response.status_code, ms=round((time.perf_counter() - t0) * 1000))
+        return response
+    finally:
+        reset_request_id(token)
 
 
 @app.exception_handler(ServiceError)

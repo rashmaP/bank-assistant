@@ -15,6 +15,8 @@ import logging
 import uuid
 from dataclasses import dataclass
 
+from common.logging_setup import logf
+
 from .bank_client import BankError, BankPort
 from .sessions import Session
 
@@ -92,11 +94,11 @@ class ToolExecutor:
         try:
             out = fn(args or {})
         except BankError as e:
-            log.warning("tool=%s bank_error=%s status=%s", name, e.code, e.status)
+            logf(log, logging.WARNING, "tool_error", tool=name, code=e.code, status=e.status)
             return ToolOutcome({"error": {"code": e.code, "message": e.message, "retryable": e.retryable}}, True)
         except (KeyError, TypeError, ValueError) as e:
             return ToolOutcome({"error": {"code": "BAD_ARGUMENTS", "message": f"Invalid arguments: {e}"}}, True)
-        log.info("tool=%s ok=%s session=%s", name, not out.is_error, self.s.id[:8])  # no PII in logs
+        logf(log, logging.INFO, "tool_call", tool=name, ok=not out.is_error, session=self.s.id[:8])  # no PII in logs
         if not out.is_error:
             self.s.grounded_text += "\n" + json.dumps(out.result, ensure_ascii=False)
         return out
@@ -128,7 +130,7 @@ class ToolExecutor:
         s = self.s
         account_id = a["account_id"]
         leaves = int(a.get("leaves") or 25)
-        if a.get("customer_confirmed") is not True:
+        if a.get("customer_confirmed") not in (True, "true", "True"):
             s.pending_cheque = {"account_id": account_id, "leaves": leaves, "turn": s.turn_no, "nonce": uuid.uuid4().hex}
             # Validate the account now so we don't ask the customer to confirm something impossible.
             self.bank.get_balance(s.customer_id, account_id)

@@ -1,18 +1,32 @@
+# docker compose up --build        (reads settings from .env in this folder)
 services:
   bank:
     build: .
     command: uvicorn mock_bank.main:app --host 0.0.0.0 --port 8001
     environment:
       BANK_SERVICE_KEY: ${BANK_SERVICE_KEY:-dev-service-key}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
     ports: ["8001:8001"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/healthz')"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
   assistant:
     build: .
-    depends_on: [bank]
+    depends_on:
+      bank:
+        condition: service_healthy
     environment:
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.groq.com/openai/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-llama-3.3-70b-versatile}
       BANK_BASE_URL: http://bank:8001
       BANK_SERVICE_KEY: ${BANK_SERVICE_KEY:-dev-service-key}
       AUTH_SECRET: ${AUTH_SECRET:-dev-only-secret}
-      DEMO_AUTH_ENABLED: "true"
+      DEMO_AUTH_ENABLED: ${DEMO_AUTH_ENABLED:-true}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
     ports: ["8000:8000"]

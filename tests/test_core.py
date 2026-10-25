@@ -155,3 +155,38 @@ def test_session_bound_to_customer():
 def test_rate_limiter():
     rl = RateLimiter(2)
     assert rl.allow("a", 0) and rl.allow("a", 1) and not rl.allow("a", 2) and rl.allow("a", 61.5)
+
+
+# ------------------------------------------------ OpenAI-compatible adapter
+def test_openai_adapter_roundtrip_conversion():
+    from assistant.llm_openai import from_openai_message, to_openai_messages, to_openai_tools
+    from assistant.tools import TOOLS
+
+    msgs = [
+        {"role": "user", "content": "balance?"},
+        {"role": "assistant", "content": [text("checking"), tool("get_balance", account_id="A")]},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tu_x", "content": "{}", "is_error": False}]},
+    ]
+    out = to_openai_messages("sys", msgs)
+    assert [m["role"] for m in out] == ["system", "user", "assistant", "tool"]
+    assert out[2]["tool_calls"][0]["function"]["arguments"] == '{"account_id": "A"}'
+    assert out[3]["tool_call_id"] == "tu_x"
+    assert to_openai_tools(TOOLS)[0]["type"] == "function"
+    r = from_openai_message({"finish_reason": "tool_calls", "message": {"content": None, "tool_calls": [
+        {"id": "c1", "function": {"name": "get_balance", "arguments": '{"account_id":"A"}'}}]}})
+    assert r.blocks[0]["input"] == {"account_id": "A"} and r.blocks[0]["name"] == "get_balance"
+
+
+def test_openai_adapter_http_error_becomes_llm_unavailable():
+    from assistant.llm import LLMUnavailable
+    from assistant.llm_openai import OpenAICompatLLM
+
+    class R:
+        status_code, text = 429, "rate limited"
+
+    class C:
+        def post(self, *a, **k):
+            return R()
+
+    with pytest.raises(LLMUnavailable):
+        OpenAICompatLLM("k", "m", "http://x/v1", client=C()).complete("s", [{"role": "user", "content": "hi"}], [])

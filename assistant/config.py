@@ -17,3 +17,7 @@ class Settings:
     max_agent_steps: int = 6
     max_history_turns: int = 12
     rate_limit_per_minute: int = 20
+    llm_provider: str = field(default_factory=lambda: os.environ.get("LLM_PROVIDER", "anthropic").lower())
+    openai_api_key: str = field(default_factory=lambda: os.environ.get("OPENAI_API_KEY", ""))
+    openai_base_url: str = field(default_factory=lambda: os.environ.get("OPENAI_BASE_URL", "https://api.groq.com/openai/v1"))
+    openai_model: str = field(default_factory=lambda: os.environ.get("OPENAI_MODEL", "llama-3.3-70b-versatile"))
